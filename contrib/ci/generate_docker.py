@@ -72,6 +72,8 @@ with open(out.name, 'w') as wfd:
                 wfd.write('RUN cat /etc/apt/sources.list | sed "s/deb/deb-src/" >> /etc/apt/sources.list\n')
                 #add new architecture
                 wfd.write('RUN dpkg --add-architecture %s\n' % SUBOS)
+                wfd.write('RUN echo APT::Immediate-Configure "0"; > /etc/apt/apt.conf.d/99immediate\n')
+                wfd.write('RUN cat /etc/apt/apt.conf.d/99immediate\n')
         elif line == "%%%OS%%%\n":
             wfd.write("ENV OS %s\n" % TARGET)
         else:
