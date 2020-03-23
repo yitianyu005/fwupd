@@ -212,17 +212,17 @@
       <package variant="x86_64" />
     </distro>
   </dependency>
-  <dependency type="build" id="debhelper">
+  <dependency type="build" id="debhelper-compat">
     <distro id="debian">
       <control>
-        <version>(>= 12)</version>
+        <version>(= 12)</version>
       </control>
       <package variant="x86_64" />
       <package variant="i386" />
     </distro>
     <distro id="ubuntu">
       <control>
-        <version>(>= 12)</version>
+        <version>(= 12)</version>
       </control>
       <package variant="x86_64" />
     </distro>
