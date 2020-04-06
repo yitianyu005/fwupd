@@ -28,3 +28,12 @@ gboolean	fu_plugin_coreboot_sysfs_probe			(void);
 const struct lb_boot_media_params *
 		fu_plugin_coreboot_get_bootmedia_params		(GError		**error);
 gboolean	fu_plugin_coreboot_has_vboot			(GError		**error);
+
+const struct fmap *
+		fu_plugin_coreboot_get_fmap			(GError		**error);
+
+struct fmap_area;
+gboolean	fu_plugin_coreboot_fmap_region_by_name		(struct fmap	*fmd,
+								 const gchar	*name,
+								 struct fmap_area	**out,
+								 GError		**error);

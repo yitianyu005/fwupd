@@ -17,6 +17,7 @@
 #include "fu-device-private.h"
 #include "fu-plugin-coreboot.h"
 #include "fu-coreboot-tables.h"
+#include "fu-coreboot-fmap.h"
 
 void
 fu_plugin_init (FuPlugin *plugin)
@@ -28,6 +29,7 @@ static void
 fu_plugin_debuginfos (FuPlugin *plugin)
 {
 	g_autofree const struct lb_boot_media_params *bmp = NULL;
+	g_autofree const struct fmap *fmd = NULL;
 	g_autoptr(GError) error = NULL;
 
 	if (!fu_plugin_coreboot_sysfs_probe ())
@@ -41,6 +43,61 @@ fu_plugin_debuginfos (FuPlugin *plugin)
 		g_debug ("BMP: Active CBFS at offset 0x%08lx", bmp->cbfs_offset);
 		g_debug ("BMP: Active CBFS size 0x%08lx", bmp->cbfs_size);
 		g_free (bmp);
+	}
+}
+
+static void
+add_vboot_regions (FuPlugin *plugin)
+{
+	const gchar * regions[] = {"RW_SECTION_A", "RW_SECTION_B"};
+	g_autofree const struct fmap *fmd = NULL;
+	g_autoptr(GError) error = NULL;
+
+	if (!fu_plugin_coreboot_sysfs_probe ())
+		return;
+
+	error = NULL;
+	fmd = fu_plugin_coreboot_get_fmap (&error);
+	if (error)
+		g_debug ("Could not get flash layout: %s", error->message);
+	if (!fmd)
+		return;
+
+	g_debug ("Flash layout of '%s'", fmd->name);
+	for (gsize i = 0; i < fmd->nareas; i++) {
+		g_debug ("region %s at offset %x with size %x",
+				fmd->areas[i].name, fmd->areas[i].offset,
+				fmd->areas[i].size);
+	}
+
+	for (gsize j = 0; j < G_N_ELEMENTS(regions); j++) {
+		const gchar *regionname = (const gchar *)regions[j];
+		g_autoptr(FuDevice) dev = NULL;
+		g_autofree gchar *name = NULL;
+		struct fmap_area *region;
+
+		error = NULL;
+		if (!fu_plugin_coreboot_fmap_region_by_name (fmd, regionname,
+							     &region,
+							     &error))
+			continue;
+
+		dev = fu_device_new ();
+		fu_device_set_summary (dev, "writeable firmware partition");
+		fu_device_set_id (dev, "coreboot-partition");
+		fu_device_add_flag (dev, FWUPD_DEVICE_FLAG_INTERNAL);
+		fu_device_add_icon (dev, "computer");
+		name = fu_plugin_coreboot_get_name_for_type (plugin, regionname);
+		if (name != NULL)
+			fu_device_set_name (dev, name);
+		fu_device_add_instance_id (dev, regionname);
+		fu_device_add_parent_guid (dev, "main-system-firmware");
+		fu_device_set_vendor_id (dev, "DMI:coreboot");
+		fu_device_set_firmware_size_max (dev, region->size);
+
+		fu_device_convert_instance_ids (dev);
+
+		fu_plugin_device_add (plugin, dev);
 	}
 }
 
@@ -158,6 +215,9 @@ fu_plugin_coldplug (FuPlugin *plugin, GError **error)
 	fu_device_convert_instance_ids (dev);
 
 	fu_plugin_device_add (plugin, dev);
+
+	if (has_vboot)
+		add_vboot_regions (plugin);
 
 	return TRUE;
 }

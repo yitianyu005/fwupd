@@ -11,6 +11,7 @@ shared_module('fu_plugin_coreboot',
     'fu-coreboot-common.c',
     'fu-coreboot-sysfs.c',
     'fu-coreboot-tables.c',
+    'fu-coreboot-fmap.c',
   ],
   include_directories : [
     root_incdir,
