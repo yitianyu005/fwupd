@@ -627,6 +627,10 @@ fu_dell_dock_ec_reboot_dock (FuDevice *device, GError **error)
 
 	g_return_val_if_fail (device != NULL, FALSE);
 
+	/* make sure we were opened up */
+	if (!fu_device_open (self->symbiote, error))
+		return FALSE;
+
 	if (self->passive_flow > 0) {
 		guint32 cmd = EC_CMD_PASSIVE |  /* cmd */
 			      1 << 8 |          /* length of data arguments */
