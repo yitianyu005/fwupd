@@ -565,12 +565,16 @@ fu_device_list_replace (FuDeviceList *self, FuDeviceItem *item, FuDevice *device
 
 	/* copy the parent if not already set */
 	if (fu_device_get_parent (item->device) != NULL &&
-	    fu_device_get_parent (item->device) != device &&
-	    fu_device_get_parent (device) != item->device &&
 	    fu_device_get_parent (device) == NULL) {
 		FuDevice *parent = fu_device_get_parent (item->device);
-		g_debug ("copying parent %s to new device", fu_device_get_id (parent));
-		fu_device_set_parent (device, parent);
+		if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_NO_AUTO_PARENT)) {
+			g_debug ("copying parent %s to new device", fu_device_get_id (parent));
+			fu_device_set_parent (device, parent);
+		} else {
+			g_debug ("not copying parent %s to new device, use "
+				 "FWUPD_DEVICE_FLAG_NO_AUTO_PARENT if required",
+				 fu_device_get_id (parent));
+		}
 	}
 
 	/* assign the new device */

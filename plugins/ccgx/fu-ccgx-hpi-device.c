@@ -102,6 +102,13 @@ fu_ccgx_hpi_device_i2c_reset_cb (FuDevice *device, gpointer user_data, GError **
 	return TRUE;
 }
 
+FWMode
+fu_ccgx_hpi_device_get_fw_mode (FuCcgxHpiDevice *self)
+{
+	g_return_val_if_fail (FU_IS_CCGX_HPI_DEVICE (self), 0);
+	return self->fw_mode;
+}
+
 static gboolean
 fu_ccgx_hpi_device_check_i2c_status (FuCcgxHpiDevice *self,
 				     guint8 mode,
@@ -924,7 +931,7 @@ fu_ccgx_hpi_device_attach (FuDevice *device, GError **error)
 
 	/* jump to Alt FW */
 	if (self->fw_image_type == FW_IMAGE_TYPE_DUAL_ASYMMETRIC &&
-	    self->fw_mode == FW_MODE_FW2 &&
+	    self->fw_mode == FW_MODE_FW1 &&
 	    self->enter_alt_mode) {
 		guint8 buf[] = {
 			CY_PD_JUMP_TO_ALT_FW_CMD_SIG,
@@ -1003,12 +1010,12 @@ fu_ccgx_hpi_device_prepare_firmware (FuDevice *device,
 		}
 	}
 	fw_mode = fu_ccgx_firmware_get_fw_mode (FU_CCGX_FIRMWARE (firmware));
-	if (fw_mode != fu_ccgx_fw_mode_get_alternate (self->fw_mode)) {
+	if (fw_mode != self->fw_mode) {
 		g_set_error (error,
 			     FWUPD_ERROR,
 			     FWUPD_ERROR_NOT_SUPPORTED,
 			     "FWMode mismatch, expected %s, got %s",
-			     fu_ccgx_fw_mode_to_string (fu_ccgx_fw_mode_get_alternate (self->fw_mode)),
+			     fu_ccgx_fw_mode_to_string (self->fw_mode),
 			     fu_ccgx_fw_mode_to_string (fw_mode));
 		return NULL;
 	}
@@ -1137,7 +1144,6 @@ fu_ccgx_hpi_write_firmware (FuDevice *device,
 	FuCcgxHpiDevice *self = FU_CCGX_HPI_DEVICE (device);
 	CCGxMetaData metadata = { 0x0 };
 	GPtrArray *records = fu_ccgx_firmware_get_records (FU_CCGX_FIRMWARE (firmware));
-	FWMode fw_mode_alt = fu_ccgx_fw_mode_get_alternate (self->fw_mode);
 	g_autoptr(FuDeviceLocker) locker = NULL;
 
 	/* enter flash mode */
@@ -1150,11 +1156,11 @@ fu_ccgx_hpi_write_firmware (FuDevice *device,
 
 	/* invalidate metadata for alternate image */
 	fu_device_set_status (device, FWUPD_STATUS_DEVICE_READ);
-	if (!fu_ccgx_hpi_load_metadata (self, fw_mode_alt, &metadata, error))
+	if (!fu_ccgx_hpi_load_metadata (self, self->fw_mode, &metadata, error))
 		return FALSE;
 	fu_device_set_status (device, FWUPD_STATUS_DEVICE_ERASE);
 	metadata.metadata_valid = 0x00;
-	if (!fu_ccgx_hpi_save_metadata (self, fw_mode_alt, &metadata, error))
+	if (!fu_ccgx_hpi_save_metadata (self, self->fw_mode, &metadata, error))
 		return FALSE;
 
 	/* write new image */
@@ -1177,7 +1183,7 @@ fu_ccgx_hpi_write_firmware (FuDevice *device,
 
 	/* validate fw */
 	fu_device_set_status (device, FWUPD_STATUS_DEVICE_VERIFY);
-	if (!fu_ccgx_hpi_validate_fw (self, fw_mode_alt, error)) {
+	if (!fu_ccgx_hpi_validate_fw (self, self->fw_mode, error)) {
 		g_prefix_error (error, "fw validate error: ");
 		return FALSE;
 	}
@@ -1192,20 +1198,15 @@ fu_ccgx_hpi_write_firmware (FuDevice *device,
 }
 
 static gboolean
-fu_ccgx_hpi_device_ensure_silicon_id (FuCcgxHpiDevice *self, GError **error)
+fu_ccgx_hpi_device_set_silicon_id (FuCcgxHpiDevice *self,
+				   guint16 silicon_id,
+				   GError **error)
 {
-	guint8 buf[2] = { 0x0 };
 	g_autofree gchar *instance_id = NULL;
 
-	if (!fu_ccgx_hpi_device_reg_read (self, CY_PD_SILICON_ID,
-					  buf, sizeof(buf), error)) {
-		g_prefix_error (error, "get silicon id error: ");
-		return FALSE;
-	}
-	if (!fu_common_read_uint16_safe (buf, sizeof(buf),
-					0x0, &self->silicon_id,
-					G_LITTLE_ENDIAN, error))
-		return FALSE;
+	g_return_val_if_fail (self->silicon_id == 0x0, FALSE);
+
+	self->silicon_id = silicon_id;
 
 	/* add quirks */
 	instance_id = g_strdup_printf ("CCGX\\SID_%X", self->silicon_id);
@@ -1220,14 +1221,11 @@ fu_ccgx_hpi_device_ensure_silicon_id (FuCcgxHpiDevice *self, GError **error)
 		g_set_error (error,
 			     FWUPD_ERROR,
 			     FWUPD_ERROR_NOT_SUPPORTED,
-			     "invalid row size for Instance ID %s: 0x%x/0x%x",
-			     instance_id,
+			     "invalid row size for device: 0x%x/0x%x",
 			     self->flash_row_size,
 			     self->flash_size);
 		return FALSE;
 	}
-
-	/* success */
 	return TRUE;
 }
 
@@ -1240,15 +1238,21 @@ fu_ccgx_hpi_device_set_version_raw (FuCcgxHpiDevice *self, guint32 version_raw)
 }
 
 static void
-fu_ccgx_hpi_device_setup_with_fw_mode (FuCcgxHpiDevice *self)
+fu_ccgx_hpi_device_set_fw_mode (FuCcgxHpiDevice *self, FWMode fw_mode)
 {
+	g_return_if_fail (self->fw_mode == FW_MODE_BOOT);
+
+	self->fw_mode = fw_mode;
 	fu_device_set_logical_id (FU_DEVICE (self),
 				  fu_ccgx_fw_mode_to_string (self->fw_mode));
 }
 
 static void
-fu_ccgx_hpi_device_setup_with_app_type (FuCcgxHpiDevice *self)
+fu_ccgx_hpi_device_set_fw_app_type (FuCcgxHpiDevice *self, guint16 fw_app_type)
 {
+	g_return_if_fail (self->fw_app_type == 0x0);
+
+	self->fw_app_type = fw_app_type;
 	if (self->silicon_id != 0x0 && self->fw_app_type != 0x0) {
 		g_autofree gchar *instance_id1 = NULL;
 		g_autofree gchar *instance_id2 = NULL;
@@ -1275,7 +1279,9 @@ fu_ccgx_hpi_device_setup (FuDevice *device, GError **error)
 {
 	FuCcgxHpiDevice *self = FU_CCGX_HPI_DEVICE (device);
 	CyI2CConfig i2c_config = { 0x0 };
+	guint16 silicon_id = 0x0;
 	guint32 hpi_event = 0;
+	guint8 buf[2] = { 0x0 };
 	guint8 mode = 0;
 	g_autoptr(GError) error_local = NULL;
 
@@ -1298,11 +1304,19 @@ fu_ccgx_hpi_device_setup (FuDevice *device, GError **error)
 	}
 	self->hpi_addrsz = mode & 0x80 ? 2 : 1;
 	self->num_ports = (mode >> 2) & 0x03 ? 2 : 1;
-	self->fw_mode = (FWMode) (mode & 0x03);
-	fu_ccgx_hpi_device_setup_with_fw_mode (self);
+	fu_ccgx_hpi_device_set_fw_mode (self, mode & 0x03);
 
 	/* get silicon ID */
-	if (!fu_ccgx_hpi_device_ensure_silicon_id (self, error))
+	if (!fu_ccgx_hpi_device_reg_read (self, CY_PD_SILICON_ID,
+					  buf, sizeof(buf), error)) {
+		g_prefix_error (error, "get silicon id error: ");
+		return FALSE;
+	}
+	if (!fu_common_read_uint16_safe (buf, sizeof(buf),
+					 0x0, &silicon_id,
+					 G_LITTLE_ENDIAN, error))
+		return FALSE;
+	if (!fu_ccgx_hpi_device_set_silicon_id (self, silicon_id, error))
 		return FALSE;
 
 	/* get correct version if not in boot mode */
@@ -1334,23 +1348,41 @@ fu_ccgx_hpi_device_setup (FuDevice *device, GError **error)
 			return FALSE;
 
 		/* add GUIDs that are specific to the firmware app type */
-		self->fw_app_type = versions[self->fw_mode] & 0xffff;
-		fu_ccgx_hpi_device_setup_with_app_type (self);
+		fu_ccgx_hpi_device_set_fw_app_type (self, versions[self->fw_mode] & 0xffff);
+		fu_ccgx_hpi_device_set_version_raw (self, versions[self->fw_mode]);
 
-		/* asymmetric these seem swapped, but we can only update the
-		 * "other" image whilst running in the current image */
-		if (self->fw_image_type == FW_IMAGE_TYPE_DUAL_SYMMETRIC) {
-			fu_ccgx_hpi_device_set_version_raw (self, versions[self->fw_mode]);
-		} else if (self->fw_image_type == FW_IMAGE_TYPE_DUAL_ASYMMETRIC) {
-			fu_ccgx_hpi_device_set_version_raw (self, versions[fu_ccgx_fw_mode_get_alternate (self->fw_mode)]);
+		/* add child so we can install FW1 then FW2 */
+		if (self->fw_image_type == FW_IMAGE_TYPE_DUAL_ASYMMETRIC) {
+			FuDeviceClass *klass_child;
+			g_autoptr(FuCcgxHpiDevice) child = NULL;
+
+			/* create virtual child */
+			child = g_object_new (FU_TYPE_CCGX_HPI_DEVICE, NULL);
+			fu_device_set_quirks (FU_DEVICE (child), fu_device_get_quirks (device));
+			fu_device_add_flag (FU_DEVICE (child), FWUPD_DEVICE_FLAG_NO_GUID_MATCHING);
+			fu_device_add_flag (FU_DEVICE (child), FWUPD_DEVICE_FLAG_NO_AUTO_PARENT);
+			fu_device_add_flag (FU_DEVICE (child), FWUPD_DEVICE_FLAG_UPDATABLE);
+			fu_usb_device_set_dev (FU_USB_DEVICE (child),
+					       fu_usb_device_get_dev (FU_USB_DEVICE (device)));
+			child->hpi_addrsz = self->hpi_addrsz;
+			child->num_ports = self->num_ports;
+			fu_ccgx_hpi_device_set_silicon_id (child, self->silicon_id, NULL);
+			fu_ccgx_hpi_device_set_fw_mode (child, fu_ccgx_fw_mode_get_alternate (self->fw_mode));
+			fu_ccgx_hpi_device_set_version_raw (child, versions[child->fw_mode]);
+			fu_ccgx_hpi_device_set_fw_app_type (child, self->fw_app_type);
+			fu_device_add_child (device, FU_DEVICE (child));
+
+			/* do not create child of child... */
+			klass_child = FU_DEVICE_GET_CLASS (child);
+			klass_child->setup = NULL;
+			if (!fu_device_setup (FU_DEVICE (child), error))
+				return FALSE;
+			klass_child->setup = fu_ccgx_hpi_device_setup;
+
+			/* change how the parent device behaves */
+			fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_NO_GUID_MATCHING);
+			fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_NO_AUTO_PARENT);
 		}
-	}
-
-	/* not supported in boot mode */
-	if (self->fw_mode == FW_MODE_BOOT) {
-		fu_device_remove_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_UPDATABLE);
-	} else {
-		fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_UPDATABLE);
 	}
 
 	/* if we are coming back from reset, wait for hardware to settle */
