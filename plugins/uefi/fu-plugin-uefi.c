@@ -91,6 +91,79 @@ fu_plugin_get_results (FuPlugin *plugin, FuDevice *device, GError **error)
 	return TRUE;
 }
 
+static void
+fu_plugin_uefi_add_hsi_tainted (FuPlugin *plugin, GPtrArray *attrs)
+{
+	FwupdSecurityAttr *attr = fwupd_security_attr_new ("org.kernel.CheckTainted");
+	fwupd_security_attr_set_name (attr, "Linux Kernel Tainted");
+	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
+	if (fu_uefi_read_file_as_uint64 ("/proc/sys/kernel", "tainted") == 0)
+		fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+	g_ptr_array_add (attrs, attr);
+}
+
+static void
+fu_plugin_uefi_add_hsi_lockdown (FuPlugin *plugin, GPtrArray *attrs)
+{
+	FwupdSecurityAttr *attr = fwupd_security_attr_new ("org.kernel.CheckLockdown");
+	gsize bufsz = 0;
+	g_autofree gchar *buf = NULL;
+	fwupd_security_attr_set_name (attr, "Linux Kernel Lockdown");
+	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
+	if (g_file_get_contents ("/sys/kernel/security/lockdown", &buf, &bufsz, NULL)) {
+		if (g_strstr_len (buf, bufsz, "[integrity]") != NULL ||
+		    g_strstr_len (buf, bufsz, "[confidentiality]") != NULL) {
+			fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+		} else {
+			fwupd_security_attr_set_summary (attr, "Not integrity or confidentiality");
+		}
+	}
+	g_ptr_array_add (attrs, attr);
+}
+
+static void
+fu_plugin_uefi_add_hsi_s3sleep (FuPlugin *plugin, GPtrArray *attrs)
+{
+	FwupdSecurityAttr *attr = fwupd_security_attr_new ("org.kernel.CheckS3Sleep");
+	gsize bufsz = 0;
+	g_autofree gchar *buf = NULL;
+	fwupd_security_attr_set_number (attr, 3);
+	fwupd_security_attr_set_name (attr, "Linux Kernel S3 Sleep");
+	if (g_file_get_contents ("/sys/power/mem_sleep", &buf, &bufsz, NULL)) {
+		if (g_strstr_len (buf, bufsz, "deep") == NULL) {
+			fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+		} else {
+			fwupd_security_attr_set_summary (attr, "Deep sleep available");
+		}
+	}
+	g_ptr_array_add (attrs, attr);
+}
+
+static void
+fu_plugin_uefi_add_hsi_secureboot (FuPlugin *plugin, GPtrArray *attrs)
+{
+	FwupdSecurityAttr *attr = fwupd_security_attr_new ("com.uefi.SecureBoot");
+	fwupd_security_attr_set_number (attr, 1);
+	fwupd_security_attr_set_name (attr, "UEFI Secure Boot");
+	if (fu_efivar_secure_boot_enabled ()) {
+		fwupd_security_attr_set_summary (attr, "Enabled");
+		fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+	} else {
+		fwupd_security_attr_set_summary (attr, "Disabled");
+	}
+	g_ptr_array_add (attrs, attr);
+}
+
+gboolean
+fu_plugin_add_security_attrs (FuPlugin *plugin, GPtrArray *attrs, GError **error)
+{
+	fu_plugin_uefi_add_hsi_secureboot (plugin, attrs);
+	fu_plugin_uefi_add_hsi_tainted (plugin, attrs);
+	fu_plugin_uefi_add_hsi_lockdown (plugin, attrs);
+	fu_plugin_uefi_add_hsi_s3sleep (plugin, attrs);
+	return TRUE;
+}
+
 static GBytes *
 fu_plugin_uefi_get_splash_data (guint width, guint height, GError **error)
 {

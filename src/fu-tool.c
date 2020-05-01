@@ -1937,6 +1937,28 @@ fu_util_get_remotes (FuUtilPrivate *priv, gchar **values, GError **error)
 	return TRUE;
 }
 
+static gboolean
+fu_util_get_hsi (FuUtilPrivate *priv, gchar **values, GError **error)
+{
+	g_autoptr(GPtrArray) attrs = NULL;
+	g_autofree gchar *str = NULL;
+
+	if (!fu_util_start_engine (priv, FU_ENGINE_LOAD_FLAG_NONE, error))
+		return FALSE;
+
+	/* TRANSLATORS: this is a string like 'HSI:2-U' */
+	g_print ("%s \033[1m%s\033[0m\n", _("Host Security ID:"),
+		 fu_engine_get_host_security_id (priv->engine));
+
+	/* print the "why" */
+	attrs = fu_engine_get_host_security_attrs (priv->engine, error);
+	if (attrs == NULL)
+		return FALSE;
+	str = fu_util_security_attrs_to_string (attrs);
+	g_print ("%s\n", str);
+	return TRUE;
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -2176,6 +2198,12 @@ main (int argc, char *argv[])
 		     /* TRANSLATORS: command description */
 		     _("Refresh metadata from remote server"),
 		     fu_util_refresh);
+	fu_util_cmd_array_add (cmd_array,
+		     "get-hsi",
+		     NULL,
+		     /* TRANSLATORS: command description */
+		     _("Gets the host security attributes."),
+		     fu_util_get_hsi);
 
 	/* do stuff on ctrl+c */
 	priv->cancellable = g_cancellable_new ();

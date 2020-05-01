@@ -583,6 +583,8 @@ LIBFWUPDPLUGIN_1.4.1 {
 
 LIBFWUPDPLUGIN_1.4.2 {
   global:
+    fu_plugin_runner_add_security_attrs;
+    fu_plugin_security_changed;
     fu_udev_device_get_parent_name;
     fu_udev_device_get_sysfs_attr;
   local: *;

@@ -49,6 +49,7 @@
 #include "fu-plugin-private.h"
 #include "fu-quirks.h"
 #include "fu-remote-list.h"
+#include "fu-security-attrs.h"
 #include "fu-smbios-private.h"
 #include "fu-udev-device-private.h"
 #include "fu-usb-device-private.h"
@@ -99,6 +100,8 @@ struct _FuEngine
 	gchar			*host_machine_id;
 	JcatContext		*jcat_context;
 	gboolean		 loaded;
+	gchar			*host_security_id;
+	gboolean		 host_security_id_valid;
 };
 
 enum {
@@ -133,6 +136,7 @@ fu_engine_emit_changed (FuEngine *self)
 static void
 fu_engine_emit_device_changed (FuEngine *self, FuDevice *device)
 {
+	self->host_security_id_valid = FALSE;
 	g_signal_emit (self, signals[SIGNAL_DEVICE_CHANGED], 0, device);
 }
 
@@ -4659,6 +4663,13 @@ fu_engine_plugin_rules_changed_cb (FuPlugin *plugin, gpointer user_data)
 }
 
 static void
+fu_engine_plugin_security_changed_cb (FuPlugin *plugin, gpointer user_data)
+{
+	FuEngine *self = FU_ENGINE (user_data);
+	fu_engine_emit_changed (self);
+}
+
+static void
 fu_engine_plugin_device_removed_cb (FuPlugin *plugin,
 				    FuDevice *device,
 				    gpointer user_data)
@@ -5017,6 +5028,143 @@ fu_engine_get_host_machine_id (FuEngine *self)
 	return self->host_machine_id;
 }
 
+static void
+fu_engine_add_security_attrs_tainted (FuEngine *self, GPtrArray *attrs)
+{
+	FwupdSecurityAttr *attr = fwupd_security_attr_new ("org.fwupd.Hsi.Plugins");
+	fwupd_security_attr_set_name (attr, "fwupd plugins");
+	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
+	if (self->tainted) {
+		fwupd_security_attr_set_summary (attr, "Tainted");
+	} else {
+		fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+	}
+	g_ptr_array_add (attrs, attr);
+}
+
+static void
+fu_engine_add_security_attrs_supported (FuEngine *self, GPtrArray *attrs)
+{
+	FwupdRelease *rel_current = NULL;
+	FwupdRelease *rel_newest = NULL;
+	FwupdSecurityAttr *attr_a;
+	FwupdSecurityAttr *attr_u;
+	guint64 now = (guint64) g_get_real_time () / G_USEC_PER_SEC;
+	g_autoptr(FuDevice) device = NULL;
+	g_autoptr(GPtrArray) releases = NULL;
+
+	/* find out if there is firmware less than 12 months old */
+	attr_u = fwupd_security_attr_new ("org.fwupd.Hsi.Updates");
+	fwupd_security_attr_add_flag (attr_u, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UPDATES);
+	fwupd_security_attr_set_name (attr_u, "Firmware Updates");
+	g_ptr_array_add (attrs, attr_u);
+
+	/* get device */
+	device = fu_device_list_get_by_guid (self->device_list,
+					     /* main-system-firmware */
+					     "230c8b18-8d9b-53ec-838b-6cfc0383493a",
+					     NULL);
+	if (device == NULL) {
+		fwupd_security_attr_set_summary (attr_u, "No system device");
+	} else {
+		releases = fu_engine_get_releases_for_device (self, device, NULL);
+		if (releases == NULL) {
+			fwupd_security_attr_set_summary (attr_u, "No releases");
+		} else {
+			/* check the age */
+			g_autofree gchar *str = NULL;
+			for (guint i = 0; i < releases->len; i++) {
+				FwupdRelease *rel_tmp = g_ptr_array_index (releases, i);
+				if (rel_newest == NULL ||
+				    fwupd_release_get_created (rel_tmp) > fwupd_release_get_created (rel_newest))
+					rel_newest = rel_tmp;
+			}
+			str = g_strdup_printf ("Newest release is %" G_GUINT64_FORMAT " months old",
+					       (now - fwupd_release_get_created (rel_newest)) / (60 * 60 * 24 * 30));
+			fwupd_security_attr_set_summary (attr_u, str);
+			if (now - fwupd_release_get_created (rel_newest) < 60 * 60 * 24 * 30 * 12)
+				fwupd_security_attr_add_flag (attr_u, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+		}
+	}
+
+	/* do we have attestation checksums */
+	attr_a = fwupd_security_attr_new ("org.fwupd.Hsi.Attestation");
+	fwupd_security_attr_set_name (attr_a, "Firmware Attestation");
+	fwupd_security_attr_add_flag (attr_a, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ATTESTATION);
+	g_ptr_array_add (attrs, attr_a);
+	if (releases != NULL) {
+		for (guint i = 0; i < releases->len; i++) {
+			FwupdRelease *rel_tmp = g_ptr_array_index (releases, i);
+			if (fu_common_vercmp_full (fu_device_get_version (device),
+						   fwupd_release_get_version (rel_tmp),
+						   fu_device_get_version_format (device)) == 0) {
+				rel_current = rel_tmp;
+				break;
+			}
+		}
+	}
+	if (rel_current == NULL) {
+		fwupd_security_attr_set_summary (attr_a, "No PCR0s");
+	} else if (fwupd_release_get_checksums(rel_current)->len > 0) {
+		fwupd_security_attr_add_flag (attr_a, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+	}
+}
+
+GPtrArray *
+fu_engine_get_host_security_attrs (FuEngine *self, GError **error)
+{
+	GPtrArray *plugins = fu_plugin_list_get_all (self->plugin_list);
+	g_autoptr(GPtrArray) attrs = NULL;
+
+	/* built in */
+	attrs = g_ptr_array_new_with_free_func ((GDestroyNotify) g_object_unref);
+	fu_engine_add_security_attrs_tainted (self, attrs);
+	fu_engine_add_security_attrs_supported (self, attrs);
+
+	/* call into plugins */
+	for (guint j = 0; j < plugins->len; j++) {
+		FuPlugin *plugin_tmp = g_ptr_array_index (plugins, j);
+		g_autoptr(GError) error_local = NULL;
+		if (!fu_plugin_runner_add_security_attrs (plugin_tmp,
+							  attrs,
+							  &error_local)) {
+			g_warning ("failed to add HSI attrs for %s: %s",
+				   fu_plugin_get_name (plugin_tmp),
+				   error_local->message);
+			continue;
+		}
+	}
+
+	/* set the obsoletes flag for each attr */
+	fu_security_attrs_depsolve (attrs);
+
+	/* sanity check */
+	if (attrs->len == 0) {
+		g_set_error_literal (error,
+				     FWUPD_ERROR,
+				     FWUPD_ERROR_INTERNAL,
+				     "no host security attributes");
+		return NULL;
+	}
+	return g_steal_pointer (&attrs);
+}
+
+const gchar *
+fu_engine_get_host_security_id (FuEngine *self)
+{
+	g_return_val_if_fail (FU_IS_ENGINE (self), NULL);
+
+	/* rebuild */
+	if (!self->host_security_id_valid) {
+		g_autoptr(GPtrArray) attrs = fu_engine_get_host_security_attrs (self, NULL);
+		g_free (self->host_security_id);
+		self->host_security_id = fu_security_attrs_calculate_hsi (attrs);
+		self->host_security_id_valid = TRUE;
+	}
+
+	return self->host_security_id;
+}
+
 gboolean
 fu_engine_load_plugins (FuEngine *self, GError **error)
 {
@@ -5105,6 +5253,9 @@ fu_engine_load_plugins (FuEngine *self, GError **error)
 				  self);
 		g_signal_connect (plugin, "rules-changed",
 				  G_CALLBACK (fu_engine_plugin_rules_changed_cb),
+				  self);
+		g_signal_connect (plugin, "security-changed",
+				  G_CALLBACK (fu_engine_plugin_security_changed_cb),
 				  self);
 
 		/* add */
@@ -5736,6 +5887,7 @@ fu_engine_finalize (GObject *obj)
 		g_source_remove (self->coldplug_id);
 
 	g_free (self->host_machine_id);
+	g_free (self->host_security_id);
 	g_object_unref (self->idle);
 	g_object_unref (self->config);
 	g_object_unref (self->remote_list);
