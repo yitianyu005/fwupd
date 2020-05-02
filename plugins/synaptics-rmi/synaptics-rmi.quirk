@@ -1,3 +1,9 @@
-[DeviceInstanceId=HIDRAW\VEN_06CB]
+[DeviceInstanceId=HIDRAW\VEN_06CB&DEV_4875]
+Plugin = synaptics_rmi
+Vendor = Synaptics
+[DeviceInstanceId=HIDRAW\VEN_06CB&DEV_76AF]
+Plugin = synaptics_rmi
+Vendor = Synaptics
+[DeviceInstanceId=HIDRAW\VEN_06CB&DEV_CD8B]
 Plugin = synaptics_rmi
 Vendor = Synaptics
