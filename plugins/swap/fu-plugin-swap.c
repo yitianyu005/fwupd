@@ -85,7 +85,8 @@ fu_plugin_add_security_attrs (FuPlugin *plugin, GPtrArray *attrs, GError **error
 	for (guint i = 1; lines[i] != NULL && lines[i][0] != '\0'; i++) {
 		g_warning ("lines[i]=%s", lines[i]);
 		g_strdelimit (lines[i], " ", '\0');
-		if (!g_str_has_prefix (lines[i], "/dev/dm-")) {
+		if (!g_str_has_prefix (lines[i], "/dev/dm-") &&
+		    !g_str_has_prefix (lines[i], "/dev/mapper")) {
 			swap_secure = FALSE;
 			break;
 		}

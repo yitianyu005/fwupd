@@ -19,8 +19,5 @@ shared_module('fu_plugin_swap',
   c_args : cargs,
   dependencies : [
     plugin_deps,
-    efivar,
-    efiboot,
-    tpm2tss,
   ],
 )
