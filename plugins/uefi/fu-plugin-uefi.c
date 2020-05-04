@@ -95,10 +95,13 @@ static void
 fu_plugin_uefi_add_hsi_tainted (FuPlugin *plugin, GPtrArray *attrs)
 {
 	FwupdSecurityAttr *attr = fwupd_security_attr_new ("org.kernel.CheckTainted");
-	fwupd_security_attr_set_name (attr, "Linux Kernel Tainted");
+	fwupd_security_attr_set_name (attr, "Linux Kernel");
 	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
-	if (fu_uefi_read_file_as_uint64 ("/proc/sys/kernel", "tainted") == 0)
+	if (fu_uefi_read_file_as_uint64 ("/proc/sys/kernel", "tainted") == 0) {
 		fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+	} else {
+		fwupd_security_attr_set_summary (attr, "Tainted");
+	}
 	g_ptr_array_add (attrs, attr);
 }
 
@@ -108,14 +111,13 @@ fu_plugin_uefi_add_hsi_lockdown (FuPlugin *plugin, GPtrArray *attrs)
 	FwupdSecurityAttr *attr = fwupd_security_attr_new ("org.kernel.CheckLockdown");
 	gsize bufsz = 0;
 	g_autofree gchar *buf = NULL;
-	fwupd_security_attr_set_name (attr, "Linux Kernel Lockdown");
+	fwupd_security_attr_set_name (attr, "Linux Kernel");
 	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
 	if (g_file_get_contents ("/sys/kernel/security/lockdown", &buf, &bufsz, NULL)) {
 		if (g_strstr_len (buf, bufsz, "[integrity]") != NULL ||
 		    g_strstr_len (buf, bufsz, "[confidentiality]") != NULL) {
 			fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
-		} else {
-			fwupd_security_attr_set_summary (attr, "Not integrity or confidentiality");
+			fwupd_security_attr_set_summary (attr, "Locked down");
 		}
 	}
 	g_ptr_array_add (attrs, attr);

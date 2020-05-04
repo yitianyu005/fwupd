@@ -221,7 +221,7 @@ fu_util_get_updates (FuUtilPrivate *priv, gchar **values, GError **error)
 }
 
 static gboolean
-fu_util_get_hsi (FuUtilPrivate *priv, gchar **values, GError **error)
+fu_util_security (FuUtilPrivate *priv, gchar **values, GError **error)
 {
 	g_autofree gchar *data = NULL;
 	g_autoptr(JsonBuilder) builder = NULL;
@@ -337,10 +337,10 @@ main (int argc, char *argv[])
 			       _("Gets the list of updates for connected hardware"),
 			       fu_util_get_updates);
 	fu_util_cmd_array_add (cmd_array,
-			       "get-hsi", NULL,
+			       "security", NULL,
 			       /* TRANSLATORS: command description */
 			       _("Gets the host security attributes"),
-			       fu_util_get_hsi);
+			       fu_util_security);
 
 	/* sort by command name */
 	fu_util_cmd_array_sort (cmd_array);

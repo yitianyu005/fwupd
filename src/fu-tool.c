@@ -1938,7 +1938,7 @@ fu_util_get_remotes (FuUtilPrivate *priv, gchar **values, GError **error)
 }
 
 static gboolean
-fu_util_get_hsi (FuUtilPrivate *priv, gchar **values, GError **error)
+fu_util_security (FuUtilPrivate *priv, gchar **values, GError **error)
 {
 	g_autoptr(GPtrArray) attrs = NULL;
 	g_autofree gchar *str = NULL;
@@ -2199,11 +2199,11 @@ main (int argc, char *argv[])
 		     _("Refresh metadata from remote server"),
 		     fu_util_refresh);
 	fu_util_cmd_array_add (cmd_array,
-		     "get-hsi",
+		     "security",
 		     NULL,
 		     /* TRANSLATORS: command description */
 		     _("Gets the host security attributes."),
-		     fu_util_get_hsi);
+		     fu_util_security);
 
 	/* do stuff on ctrl+c */
 	priv->cancellable = g_cancellable_new ();
