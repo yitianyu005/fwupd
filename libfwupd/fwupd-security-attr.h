@@ -37,7 +37,6 @@ struct _FwupdSecurityAttrClass
  * @FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UPDATES:		Suffix `U`
  * @FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ATTESTATION:	Suffix `A`
  * @FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE:		Suffix `!`
- * @FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED:		Suffix `?`
  *
  * The flags available for HSI attributes.
  **/
@@ -48,7 +47,6 @@ typedef enum {
 	FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UPDATES	= 1 << 8,
 	FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ATTESTATION	= 1 << 9,
 	FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE		= 1 << 10,
-	FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED	= 1 << 11,
 } FwupdSecurityAttrFlags;
 
 /* the maximum value defined, although this might be increased in the future */

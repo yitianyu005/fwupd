@@ -22,7 +22,6 @@ fu_security_attrs_calculate_hsi (GPtrArray *attrs)
 		FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UPDATES,
 		FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ATTESTATION,
 		FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE,
-		FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED,
 		FWUPD_SECURITY_ATTR_FLAG_NONE,
 	};
 
@@ -64,8 +63,7 @@ fu_security_attrs_calculate_hsi (GPtrArray *attrs)
 				continue;
 		}
 		/* negative things */
-		if (fwupd_security_attr_has_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE) ||
-		    fwupd_security_attr_has_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED)) {
+		if (fwupd_security_attr_has_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE)) {
 			if (fwupd_security_attr_has_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS))
 				continue;
 		}
@@ -75,8 +73,7 @@ fu_security_attrs_calculate_hsi (GPtrArray *attrs)
 	g_string_append_printf (str, "%u", hsi_number);
 	if (flags & (FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UPDATES |
 		     FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ATTESTATION |
-		     FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE |
-		     FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED)) {
+		     FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE)) {
 		g_string_append (str, "+");
 		for (guint j = 0; hpi_suffixes[j] != FWUPD_SECURITY_ATTR_FLAG_NONE; j++) {
 			if (flags & hpi_suffixes[j])

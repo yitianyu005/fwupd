@@ -163,7 +163,6 @@ fu_plugin_hsi_func (gconstpointer user_data)
 	g_autofree gchar *hsi5 = NULL;
 	g_autofree gchar *hsi6 = NULL;
 	g_autofree gchar *hsi7 = NULL;
-	g_autofree gchar *hsi8 = NULL;
 	g_autoptr(FuEngine) engine = fu_engine_new (FU_APP_FLAGS_NONE);
 	g_autoptr(GPtrArray) attrs = NULL;
 
@@ -200,7 +199,7 @@ fu_plugin_hsi_func (gconstpointer user_data)
 	/* add taint that was fine */
 	attr = fwupd_security_attr_new ("org.fwupd.Hsi.PluginsTainted");
 	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
-	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
+	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE);
 	g_ptr_array_add (attrs, attr);
 	hsi5 = fu_security_attrs_calculate_hsi (attrs);
 	g_assert_cmpstr (hsi5, ==, "HSI:3");
@@ -219,14 +218,7 @@ fu_plugin_hsi_func (gconstpointer user_data)
 	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE);
 	g_ptr_array_add (attrs, attr);
 	hsi7 = fu_security_attrs_calculate_hsi (attrs);
-	g_assert_cmpstr (hsi7, ==, "HSI:3+UAX");
-
-	/* add taint */
-	attr = fwupd_security_attr_new ("org.fwupd.Hsi.Lockdown");
-	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
-	g_ptr_array_add (attrs, attr);
-	hsi8 = fu_security_attrs_calculate_hsi (attrs);
-	g_assert_cmpstr (hsi8, ==, "HSI:3+UAX?");
+	g_assert_cmpstr (hsi7, ==, "HSI:3+UA!");
 }
 
 static void

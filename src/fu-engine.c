@@ -5033,7 +5033,7 @@ fu_engine_add_security_attrs_tainted (FuEngine *self, GPtrArray *attrs)
 {
 	FwupdSecurityAttr *attr = fwupd_security_attr_new ("org.fwupd.Hsi.Plugins");
 	fwupd_security_attr_set_name (attr, "fwupd plugins");
-	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED);
+	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE);
 	if (self->tainted) {
 		fwupd_security_attr_set_summary (attr, "Tainted");
 	} else {

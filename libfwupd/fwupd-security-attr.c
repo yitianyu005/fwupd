@@ -57,8 +57,6 @@ fwupd_security_attr_flag_to_string (FwupdSecurityAttrFlags flag)
 		return "runtime-attestation";
 	if (flag == FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE)
 		return "runtime-issue";
-	if (flag == FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED)
-		return "runtime-untrusted";
 	return NULL;
 }
 
@@ -80,9 +78,7 @@ fwupd_security_attr_flag_to_suffix (FwupdSecurityAttrFlags flag)
 	if (flag == FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ATTESTATION)
 		return "A";
 	if (flag == FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE)
-		return "X";
-	if (flag == FWUPD_SECURITY_ATTR_FLAG_RUNTIME_UNTRUSTED)
-		return "?";
+		return "!";
 	return NULL;
 }
 
