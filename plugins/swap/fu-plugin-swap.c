@@ -8,6 +8,7 @@
 
 #include "fu-plugin-vfuncs.h"
 #include "fu-hash.h"
+#include "fu-swap.h"
 
 #define FU_PLUGIN_SWAP_SOURCE_FILE	"/proc/swaps"
 
@@ -61,12 +62,16 @@ fu_plugin_add_security_attrs (FuPlugin *plugin, GPtrArray *attrs, GError **error
 	gsize bufsz = 0;
 	g_autofree gchar *buf = NULL;
 	g_autoptr(GError) error_local = NULL;
-	g_auto(GStrv) lines = NULL;
-	gboolean swap_secure = TRUE;
+	g_autoptr(FuSwap) swap = NULL;
 
 	/* load list of swaps */
 	if (!g_file_get_contents (FU_PLUGIN_SWAP_SOURCE_FILE, &buf, &bufsz, error)) {
 		g_prefix_error (error, "could not open %s: ", FU_PLUGIN_SWAP_SOURCE_FILE);
+		return FALSE;
+	}
+	swap = fu_swap_new (buf, bufsz, error);
+	if (swap == NULL) {
+		g_prefix_error (error, "could not parse %s: ", FU_PLUGIN_SWAP_SOURCE_FILE);
 		return FALSE;
 	}
 
@@ -75,25 +80,12 @@ fu_plugin_add_security_attrs (FuPlugin *plugin, GPtrArray *attrs, GError **error
 	fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_RUNTIME_ISSUE);
 	fwupd_security_attr_set_name (attr, "Linux Swap");
 	g_ptr_array_add (attrs, attr);
-	lines = fu_common_strnsplit (buf, bufsz, "\n", -1);
-	if (g_strv_length (lines) <= 2) {
-		fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
-		return TRUE;
-	}
-
-	/* check each swap, ignoring header line */
-	for (guint i = 1; lines[i] != NULL && lines[i][0] != '\0'; i++) {
-		g_warning ("lines[i]=%s", lines[i]);
-		g_strdelimit (lines[i], " ", '\0');
-		if (!g_str_has_prefix (lines[i], "/dev/dm-") &&
-		    !g_str_has_prefix (lines[i], "/dev/mapper")) {
-			swap_secure = FALSE;
-			break;
-		}
-	}
 
 	/* add security attribute */
-	if (swap_secure) {
+	if (!fu_swap_get_enabled (swap)) {
+		fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
+		fwupd_security_attr_set_summary (attr, "Disabled");
+	} else if (fu_swap_get_encrypted (swap)) {
 		fwupd_security_attr_add_flag (attr, FWUPD_SECURITY_ATTR_FLAG_SUCCESS);
 		fwupd_security_attr_set_summary (attr, "Encrypted");
 	} else {
