@@ -10,6 +10,7 @@
 #include <fwupd.h>
 
 #include "fu-common.h"
+#include "fu-uefi-dbx-common.h"
 #include "fu-uefi-dbx-file.h"
 
 struct _FuUefiDbxFile {
