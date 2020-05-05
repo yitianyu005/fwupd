@@ -8,6 +8,7 @@
 
 #include <fwupd.h>
 
+#include "fu-uefi-dbx-common.h"
 #include "fu-uefi-dbx-file.h"
 
 static void
@@ -15,8 +16,8 @@ fu_uefi_dbx_file_parse_func (void)
 {
 	gboolean ret;
 	gsize bufsz = 0;
+	g_autofree gchar *fn = NULL;
 	g_autofree guint8 *buf = NULL;
-	g_autofree guint8 *fn = NULL;
 	g_autoptr(FuUefiDbxFile) uefi_dbx_file = NULL;
 	g_autoptr(GError) error = NULL;
 
