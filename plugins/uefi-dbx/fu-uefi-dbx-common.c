@@ -42,22 +42,26 @@ fu_common_filename_glob (const gchar *directory, const gchar *pattern, GError **
 gchar *
 fu_uefi_dbx_get_dbxupdate (GError **error)
 {
-	g_autofree gchar *dbxtooldir = NULL;
+	g_autofree gchar *dbxdir = NULL;
 	g_autofree gchar *glob = NULL;
 	g_autoptr(GPtrArray) files = NULL;
 
 	/* fall back out of prefix */
-	dbxtooldir = g_build_filename (FWUPD_DATADIR, "dbxtool", NULL);
-	if (!g_file_test (dbxtooldir, G_FILE_TEST_EXISTS)) {
-		g_free (dbxtooldir);
-		dbxtooldir = g_strdup ("/usr/share/dbxtool");
+	dbxdir = g_build_filename (FWUPD_DATADIR, "dbxtool", NULL);
+	if (!g_file_test (dbxdir, G_FILE_TEST_EXISTS)) {
+		g_free (dbxdir);
+		dbxdir = g_strdup ("/usr/share/dbxtool");
+	}
+	if (!g_file_test (dbxdir, G_FILE_TEST_EXISTS)) {
+		g_free (dbxdir);
+		dbxdir = g_strdup ("/usr/share/secureboot/updates/dbx");
 	}
 
 	/* get the newest files from dbxtool, prefer the per-arch ones first */
 	glob = g_strdup_printf ("*%s*.bin", EFI_MACHINE_TYPE_NAME);
-	files = fu_common_filename_glob (dbxtooldir, glob, NULL);
+	files = fu_common_filename_glob (dbxdir, glob, NULL);
 	if (files == NULL)
-		files = fu_common_filename_glob (dbxtooldir, "*.bin", error);
+		files = fu_common_filename_glob (dbxdir, "*.bin", error);
 	if (files == NULL)
 		return NULL;
 	return g_strdup (g_ptr_array_index (files, 0));

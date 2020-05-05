@@ -5,6 +5,19 @@
       <package />
     </distro>
   </dependency>
+  <dependency type="build" id="secureboot-db">
+    <distro id="ubuntu">
+      <package />
+    </distro>
+    <distro id="debian">
+      <package />
+    </distro>
+  </dependency>
+  <dependency type="build" id="dbxtool">
+    <distro id="fedora">
+      <package />
+    </distro>
+  </dependency>
   <dependency type="build" id="abigail-tools">
     <distro id="debian">
       <package variant="x86_64" />
